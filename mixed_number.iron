@@ -1,0 +1,15 @@
+package mixed_number
+
+project
+	mixed_number = "mixed_number.ecf"
+
+note
+	title: Mixed Number
+	description: "Eiffel library for working with Mixed Numbers"
+
+	tags: eiffel,mixed number
+	license: Eiffel Forum License v2 
+	copyright: 2018 Larry Rix
+	link[license]: http://www.eiffel.com/licensing/forum.txt external
+
+end
