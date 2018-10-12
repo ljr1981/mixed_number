@@ -283,6 +283,9 @@ feature -- Tests
 			testing:  "run/checkin/regular"
 		local
 			l_mixed_1, l_mixed_2, l_mixed_answer: MIXED_NUMBER
+			l_decimal: DECIMAL
+			l_integer: INTEGER
+			l_real: REAL
 		do
 			create l_mixed_1.make (False, 1, 2, 3)
 			create l_mixed_2.make (False, 1, 1, 3)
@@ -308,6 +311,25 @@ feature -- Tests
 			create l_mixed_2.make (True, 1, 1, 3)
 			create l_mixed_answer.make (True, 5, 0, 1)
 			assert ("is_equal_neg_5_0_1", (l_mixed_1 + l_mixed_2) ~ (l_mixed_answer))
+
+				-- DECIMAL
+			create l_mixed_1.make_positive (3, 2, 3)
+			create l_decimal.make_from_string ("1.3333")
+			create l_mixed_answer.make_positive (4, 29999, 30000)
+			assert_strings_equal ("mixed_plus_decimal", (l_mixed_1 + l_decimal).out, l_mixed_answer.out)
+
+				-- REAL
+			create l_mixed_1.make_positive (3, 2, 3)
+			l_real := 1.3333
+			create l_mixed_answer.make_positive (4, 29999, 30000)
+			assert_strings_equal ("mixed_plus_real", (l_mixed_1 + l_real).out, l_mixed_answer.out)
+
+				-- INTEGER
+			create l_mixed_1.make_positive (3, 2, 3)
+			l_integer := 2
+			create l_mixed_answer.make_positive (5, 2, 3)
+			assert_strings_equal ("mixed_plus_real", (l_mixed_1 + l_integer).out, l_mixed_answer.out)
+			assert_strings_equal ("mixed_plus_real", (l_integer + l_mixed_1).out, l_mixed_answer.out) -- works either way!
 
 		end
 
@@ -368,6 +390,9 @@ feature -- Tests
 			testing:  "run/checkin/regular"
 		local
 			l_mixed_1, l_mixed_2, l_mixed_answer: MIXED_NUMBER
+			l_integer: INTEGER
+			l_real: REAL
+			l_decimal: DECIMAL
 		do
 			create l_mixed_1.make (False, 1, 2, 3)
 			create l_mixed_2.make (False, 1, 1, 3)
@@ -394,6 +419,24 @@ feature -- Tests
 			create l_mixed_answer.make (False, 4, 8, 9)
 			assert ("product_5_correct", (l_mixed_1 * l_mixed_2) ~ (l_mixed_answer))
 
+				-- Prep ...
+			create l_mixed_1.make_positive (5, 2, 3)
+
+				-- decimal
+			create l_decimal.make_from_string ("10.559")
+			create l_mixed_answer.make_positive (59, 2503, 3000)
+			assert_strings_equal ("mixed_times_decimal_2", (l_mixed_1 * l_decimal).out, l_mixed_answer.out)
+
+				-- integer
+			l_integer := 1234
+			create l_mixed_answer.make_positive (6992, 2, 3)
+			assert_strings_equal ("mixed_times_integer", (l_mixed_1 * l_integer).out, l_mixed_answer.out)
+
+				-- real
+			l_real := 1234.987
+			create l_mixed_1.make_positive (1, 0, 1)
+			create l_mixed_answer.make_positive (1234, 99, 100)
+			assert_strings_equal ("mixed_times_integer", (l_mixed_1 * l_real).out, l_mixed_answer.out)
 		end
 
 	quotient_test

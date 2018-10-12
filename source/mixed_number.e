@@ -1,11 +1,15 @@
 note
 	description: "Representation of a mixed number."
+	design_and_usage_notes: "See note clause at the end of class."
 
 class
 	MIXED_NUMBER
 
 inherit
 	NUMERIC
+		rename
+			plus as plus_old,
+			quotient as quotient_old
 		redefine
 			out, is_equal, default_create
 		end
@@ -27,6 +31,8 @@ inherit
 
 create
 	make,
+	make_positive,
+	make_negative,
 	make_from_integer_32,
 	make_from_integer_64,
 	default_create
@@ -36,6 +42,18 @@ convert
 	make_from_integer_64 ({INTEGER_64})
 
 feature {NONE} -- Initialization
+
+	make_positive (a_whole: NATURAL_64; a_numerator, a_denominator: NATURAL_32)
+			-- Initialize Current as a positive mixed number value.
+		do
+			make (positive, a_whole, a_numerator, a_denominator)
+		end
+
+	make_negative (a_whole: NATURAL_64; a_numerator, a_denominator: NATURAL_32)
+			-- Initialize Current as a negative mixed number value.
+		do
+			make (negative, a_whole, a_numerator, a_denominator)
+		end
 
 	make (a_is_negative: BOOLEAN; a_whole: NATURAL_64; a_numerator, a_denominator: NATURAL_32)
 			-- Initialize current with `a_whole' as `whole_part', `a_numerator' as `numerator'
@@ -250,7 +268,7 @@ feature -- Basic operations
 			same_absolute_value: (Result ~ Current) or (Result ~ - Current)
 		end
 
-	plus alias "+" (other: like Current): like Current
+	plus alias "+" (other: NUMERIC): like Current
 			-- Sum with `other'
 		local
 			l_this_numerator, l_new_numerator, l_this_denominator: INTEGER_32
@@ -258,19 +276,35 @@ feature -- Basic operations
 			l_common_denominator: INTEGER_32
 			l_gcd, l_final_denominator, l_final_numerator: NATURAL_32
 			l_this_improper_numerator, l_other_improper_numerator: INTEGER_32
+			l_other: like Current
 		do
+			if attached {like Current} other as al_other then
+				l_other := al_other
+			elseif attached {DECIMAL} other as al_decimal then
+				l_other := convert_decimal_to_mixed (al_decimal)
+			else
+				l_other := convert_decimal_to_mixed (convert_numeric_to_decimal (other))
+			end
 			l_this_improper_numerator := improper_numerator.as_integer_32
 			l_this_denominator := denominator.as_integer_32
-			l_other_improper_numerator := other.improper_numerator.as_integer_32
-			l_other_denominator := other.denominator.as_integer_32
+			l_other_improper_numerator := l_other.improper_numerator.as_integer_32
+			l_other_denominator := l_other.denominator.as_integer_32
 			l_common_denominator := l_this_denominator * l_other_denominator
 			l_this_numerator := ((l_this_improper_numerator) * l_other_denominator) * sign
-			l_other_numerator := ((l_other_improper_numerator) * l_this_denominator) * other.sign
+			l_other_numerator := ((l_other_improper_numerator) * l_this_denominator) * l_other.sign
 			l_new_numerator := l_this_numerator + l_other_numerator
-			l_gcd := gcd (denominator, other.denominator)
+			l_gcd := gcd (denominator, l_other.denominator)
 			l_final_denominator := l_common_denominator.as_natural_32 // l_gcd
 			l_final_numerator := l_new_numerator.abs.as_natural_32 // l_gcd
 			create Result.make ((l_new_numerator < 0), 0, l_final_numerator, l_final_denominator)
+		end
+
+	plus_old (other: like Current): like Current
+			-- <Precursor>
+			-- See new `plus' above.
+		do
+			create Result
+			check do_not_call: False end
 		end
 
 	minus alias "-" (other: like Current): like Current
@@ -279,28 +313,72 @@ feature -- Basic operations
 			Result := plus (- other)
 		end
 
-	product alias "*" (other: like Current): like Current
+	product alias "*" (other: NUMERIC): like Current
 			-- Product by `other'
 		local
 			l_new_numerator, l_new_denominator, l_gcd: NATURAL_32
 			l_result_negative: BOOLEAN
+			l_other: like Current
+			l_decimal: DECIMAL
+			l_whole, l_numerator, l_denominator: INTEGER_64
 		do
-			l_new_numerator := (improper_numerator * other.improper_numerator).as_natural_32
-			l_new_denominator := (denominator * other.denominator).as_natural_32
+			if attached {like Current} other as al_other then
+				l_other := al_other
+			elseif attached {DECIMAL} other as al_decimal then
+				create l_other.make (al_decimal.is_negative, al_decimal.out.split ('.') [1].to_integer.as_natural_64, al_decimal.out.split ('.') [2].to_integer.as_natural_32, (10^al_decimal.exponent.abs).truncated_to_integer.as_natural_32)
+			else
+				l_decimal := convert_numeric_to_decimal (other)
+				l_other := convert_decimal_to_mixed (l_decimal)
+			end
+			l_new_numerator := (improper_numerator * l_other.improper_numerator).as_natural_32
+			l_new_denominator := (denominator * l_other.denominator).as_natural_32
 			l_gcd := gcd (l_new_numerator, l_new_denominator)
 			l_new_numerator := l_new_numerator // l_gcd
 			l_new_denominator := l_new_denominator // l_gcd
-			l_result_negative := not (is_negative = other.is_negative)
+			l_result_negative := not (is_negative = l_other.is_negative)
 			create Result.make (l_result_negative, 0, l_new_numerator, l_new_denominator)
 		end
 
-	quotient alias "/" (other: like Current): like Current
+	quotient alias "/" (other: NUMERIC): like Current
 			-- Division by `other'
+		note
+			design: "[
+				The second precondition from `quotient_old' is converted to a
+				check-condition `good_divisor' within the code because we must
+				perform a conversion of `other' into being "like Current".
+				Once we have a new `l_other: like Current', then we can test
+				for `divisible' by `l_other'.
+				]"
+		require
+			other_exists: other /= Void
 		local
 			l_divisor: MIXED_NUMBER
+			l_other: like Current
 		do
-			create l_divisor.make (other.is_negative, 0, other.denominator, other.improper_numerator.as_natural_32)
+			if attached {like Current} other as al_other then
+				l_other := al_other
+			elseif attached {DECIMAL} other as al_decimal then
+				l_other := convert_decimal_to_mixed (al_decimal)
+			else
+				l_other := convert_decimal_to_mixed (convert_numeric_to_decimal (other))
+			end
+			check good_divisor: divisible (l_other) end
+			create l_divisor.make (l_other.is_negative, 0, l_other.denominator, l_other.improper_numerator.as_natural_32)
 			Result := product (l_divisor)
+		end
+
+	quotient_old (other: like Current): like Current
+			-- <Precursor>
+			-- See new `quotient' (above).
+		note
+			design: "[
+				The old quotient (divide) is limited to just dividing by {MIXED_NUMBER}.
+				The new `quotient' is now open to being any {NUMERIC} object.
+				See the notes for the new `quotient'.
+				]"
+		do
+			create Result
+			check do_not_call: False end
 		end
 
 	identity alias "+": like Current
@@ -365,6 +443,39 @@ feature {ANY} -- Implementation
 			end
 		end
 
+feature {NONE} -- Implementation: Converters
+
+	convert_numeric_to_decimal (other: NUMERIC): DECIMAL
+			-- Convert `other' from {NUMERIC} to {DECIMAL}.
+		local
+			l_whole, l_numerator, l_denominator: INTEGER_64
+		do
+			create Result.make_from_string (other.out)
+			if Result.exponent.abs > ("2147483648").count then
+				Result := Result.round_to (1_000)
+			end
+		end
+
+	convert_decimal_to_mixed (a_decimal: DECIMAL): like Current
+			-- Convert `other' from {DECIMAL} to {MIXED_NUMBER}.
+		local
+			l_whole, l_numerator, l_denominator: INTEGER_64
+		do
+			if not (a_decimal.exponent = 0) then
+				l_whole := a_decimal.out.split ('.') [1].to_integer_32
+				l_numerator := a_decimal.out.split ('.') [2].to_integer_32
+				l_denominator := (10^a_decimal.exponent.abs).truncated_to_integer
+				create Result.make (a_decimal.is_negative, l_whole.as_natural_64, l_numerator.as_natural_32, l_denominator.as_natural_32)
+			else
+				create Result.make (a_decimal.is_negative, a_decimal.out.to_integer.as_natural_64, 0, 1)
+			end
+		end
+
+feature {NONE} -- Implementation: Constants
+
+	positive: BOOLEAN = False
+	negative: BOOLEAN = True
+
 invariant
 	-- sign_times_abs: (sign * abs) ~ Current
 	-- Too expensive for an invariant.
@@ -374,5 +485,12 @@ invariant
 	not_is_negative_implies_sign_ge_zero: not is_negative implies sign >= 0
 	proper_fraction: numerator < denominator
 	denominator_definition: denominator > 0
+
+note
+	design: "[
+		Allow storage of mixed number values such as 5 2/3. Also allow
+		for basic math operations with mixed numbers as well as standard
+		integers, reals, and decimals (e.g. 5 2/3 x 10.559)
+		]"
 
 end
